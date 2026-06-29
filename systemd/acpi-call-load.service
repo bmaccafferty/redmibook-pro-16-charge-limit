@@ -1,11 +1,15 @@
 [Unit]
-Description=Load acpi_call kernel module
+Description=Load acpi_call kernel module (rebuilds if needed)
 Before=multi-user.target
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash -c 'lsmod | grep -q acpi_call || insmod /var/lib/battery-charge-limit/acpi_call.ko'
+ExecStart=/bin/bash /var/lib/battery-charge-limit/rebuild-acpi-call.sh
 RemainAfterExit=yes
+CapabilityBoundingSet=CAP_SYS_MODULE
+AmbientCapabilities=CAP_SYS_MODULE
+ProtectKernelModules=no
+SELinuxContext=system_u:system_r:unconfined_t:s0
 
 [Install]
 WantedBy=multi-user.target

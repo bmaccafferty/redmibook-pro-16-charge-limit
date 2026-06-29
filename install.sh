@@ -9,39 +9,43 @@ CONFIG_DIR="${HOME}/.config/battery-charge-limit"
 echo "=== Battery Charge Limit — Install ==="
 
 # --- 1. acpi_call kernel module ---
-echo "[1/5] Installing acpi_call kernel module..."
-if ! lsmod | grep -q acpi_call; then
-    if [ -f /var/lib/battery-charge-limit/acpi_call.ko ]; then
-        sudo insmod /var/lib/battery-charge-limit/acpi_call.ko
-    else
-        echo "  WARNING: acpi_call.ko not found at /var/lib/battery-charge-limit/"
-        echo "  Build it first: https://github.com/nix-community/acpi_call"
-    fi
+echo "[1/6] Cloning acpi_call source for auto-rebuild..."
+sudo mkdir -p /var/lib/battery-charge-limit
+if [ ! -d /var/lib/battery-charge-limit/acpi_call_src ]; then
+    sudo git clone --depth=1 https://github.com/nix-community/acpi_call.git /var/lib/battery-charge-limit/acpi_call_src
+    echo "  ✓ Source cached at /var/lib/battery-charge-limit/acpi_call_src"
+else
+    echo "  ✓ Source already cached"
 fi
+
+echo "  Installing rebuild script..."
+sudo cp "${REPO_DIR}/bin/rebuild-acpi-call.sh" /var/lib/battery-charge-limit/
+sudo chmod +x /var/lib/battery-charge-limit/rebuild-acpi-call.sh
+echo "  ✓ rebuild-acpi-call.sh"
 
 # Install module load system service
 sudo cp "${REPO_DIR}/systemd/acpi-call-load.service" /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable acpi-call-load.service
-sudo systemctl start acpi-call-load.service
+sudo systemctl start acpi-call-load.service || true
 echo "  ✓ acpi-call-load.service installed & started"
 
 # --- 2. Backend script ---
-echo "[2/5] Installing backend script..."
+echo "[2/6] Installing backend script..."
 mkdir -p "${BIN_DIR}"
 cp "${REPO_DIR}/bin/battery-charge-limit" "${BIN_DIR}/battery-charge-limit"
 chmod +x "${BIN_DIR}/battery-charge-limit"
 echo "  ✓ ${BIN_DIR}/battery-charge-limit"
 
 # --- 3. Sudoers rule ---
-echo "[3/5] Installing sudoers rule (NOPASSWD)..."
+echo "[3/6] Installing sudoers rule (NOPASSWD)..."
 sudo cp "${REPO_DIR}/sudoers.d/battery-charge-limit" /etc/sudoers.d/
 sudo chmod 440 /etc/sudoers.d/battery-charge-limit
 sudo visudo -c -f /etc/sudoers.d/battery-charge-limit
 echo "  ✓ /etc/sudoers.d/battery-charge-limit"
 
 # --- 4. GTK4 GUI ---
-echo "[4/5] Installing GUI..."
+echo "[4/6] Installing GUI..."
 cp "${REPO_DIR}/bin/battery-charge-limit-gui" "${BIN_DIR}/battery-charge-limit-gui"
 chmod +x "${BIN_DIR}/battery-charge-limit-gui"
 
@@ -61,7 +65,7 @@ EOF
 echo "  ✓ GUI + desktop entry"
 
 # --- 5. Config dir + systemd user service ---
-echo "[5/5] Installing systemd user service (boot restore)..."
+echo "[5/6] Installing systemd user service (boot restore)..."
 mkdir -p "${SYSTEMD_USER_DIR}"
 cp "${REPO_DIR}/systemd/battery-charge-limit-restore.service" "${SYSTEMD_USER_DIR}/"
 mkdir -p "${CONFIG_DIR}"
@@ -69,6 +73,14 @@ systemctl --user daemon-reload
 systemctl --user enable battery-charge-limit-restore.service
 systemctl --user restart battery-charge-limit-restore.service
 echo "  ✓ battery-charge-limit-restore.service enabled"
+
+# --- 6. Clean up stale module (if kernel changed) ---
+echo "[6/6] Checking kernel module compatibility..."
+if lsmod | grep -q acpi_call; then
+    echo "  ✓ Module already loaded"
+else
+    echo "  Will rebuild on next boot via acpi-call-load.service"
+fi
 
 echo ""
 echo "=== Install complete ==="

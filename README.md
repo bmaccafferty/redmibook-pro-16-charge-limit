@@ -107,20 +107,27 @@ cp systemd/battery-charge-limit-restore.service ~/.config/systemd/user/
 systemctl --user enable battery-charge-limit-restore.service
 ```
 
-### 6. Kernel Module Auto-Load (optional)
+### 6. Kernel Module Auto-Load & Rebuild (optional)
+
+The module is loaded at boot via `acpi-call-load.service`. If the kernel updates
+(common on atomic Fedora), the service automatically rebuilds the module from
+cached source — no manual intervention needed.
 
 ```bash
 sudo cp systemd/acpi-call-load.service /etc/systemd/system/
 sudo systemctl enable acpi-call-load.service
 ```
 
+Requires `kernel-devel` for the running kernel (pre-installed on Bazzite).
+
 ## Files
 
 | Path | Purpose |
-|---|---|
+|---|---|---|
 | `bin/battery-charge-limit` | Backend CLI — set/get/disable/restore |
 | `bin/battery-charge-limit-gui` | GTK4 GUI app |
-| `systemd/acpi-call-load.service` | Loads kernel module at boot |
+| `bin/rebuild-acpi-call.sh` | Auto-rebuild script for kernel updates |
+| `systemd/acpi-call-load.service` | Loads kernel module at boot (rebuilds if needed) |
 | `systemd/battery-charge-limit-restore.service` | Restores limit after login |
 | `sudoers.d/battery-charge-limit` | NOPASSWD rule for the backend |
 | `install.sh` | Automated install |
