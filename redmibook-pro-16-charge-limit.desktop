@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=RedmiBook Pro 16 Charge Limit
+Comment=Xiaomi RedmiBook Pro 16 charge limit
+Exec=redmibook-pro-16-charge-limit-gui
+Icon=battery
+Terminal=false
+Categories=Settings;X-Hardware;
+StartupNotify=true

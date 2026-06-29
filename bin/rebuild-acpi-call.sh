@@ -9,9 +9,9 @@
 
 set -euo pipefail
 
-SRC_DIR="/var/lib/battery-charge-limit/acpi_call_src"
+SRC_DIR="/var/lib/redmibook-pro-16-charge-limit/acpi_call_src"
 MODULE_OUT="/tmp/acpi_call.ko"
-MODULE_DEST="/var/lib/battery-charge-limit/acpi_call.ko"
+MODULE_DEST="/var/lib/redmibook-pro-16-charge-limit/acpi_call.ko"
 
 # 1. Already loaded?
 if lsmod | grep -q acpi_call; then

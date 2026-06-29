@@ -6,7 +6,7 @@ Requires=graphical-session.target
 [Service]
 Type=oneshot
 ExecStartPre=/bin/bash -c 'sleep 5; while [ ! -f /proc/acpi/call ]; do sleep 1; done'
-ExecStart=sudo -n %h/.local/bin/battery-charge-limit restore
+ExecStart=sudo -n %h/.local/bin/redmibook-pro-16-charge-limit restore
 RemainAfterExit=yes
 
 [Install]

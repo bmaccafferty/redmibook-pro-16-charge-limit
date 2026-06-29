@@ -11,7 +11,7 @@ import subprocess
 import os
 import sys
 
-BACKEND = os.path.expanduser("~/.local/bin/battery-charge-limit")
+BACKEND = os.path.expanduser("~/.local/bin/redmibook-pro-16-charge-limit")
 LIMITS = [40, 50, 60, 70, 80]
 
 
@@ -38,7 +38,7 @@ def run_backend(*args):
 class ChargeLimitApp(Adw.Application):
     def __init__(self):
         super().__init__(
-            application_id="com.xiomi.charge-limiter",
+            application_id="com.xiomi.redmibook-pro-16-charge-limit",
             flags=Gio.ApplicationFlags.DEFAULT_FLAGS,
         )
 
@@ -51,7 +51,7 @@ class ChargeLimitWindow(Adw.Window):
     def __init__(self, app):
         super().__init__(
             application=app,
-            title="Charge Limit",
+            title="RedmiBook Pro 16 Charge Limit",
             default_width=380,
             default_height=320,
             resizable=False,
@@ -80,7 +80,7 @@ class ChargeLimitWindow(Adw.Window):
         toolbox.set_content(page)
 
         # — Limit selection group —
-        group = Adw.PreferencesGroup(title="Charge Limit")
+        group = Adw.PreferencesGroup(title="RedmiBook Pro 16 Charge Limit")
         page.add(group)
 
         self.radio_rows = {}

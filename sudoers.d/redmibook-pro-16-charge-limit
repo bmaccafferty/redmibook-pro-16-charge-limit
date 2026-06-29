@@ -1,0 +1,1 @@
+%wheel ALL=(ALL:ALL) NOPASSWD: /home/*/.local/bin/redmibook-pro-16-charge-limit

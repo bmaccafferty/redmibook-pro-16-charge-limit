@@ -2,10 +2,10 @@
 """Set, disable, get, or restore the Xiaomi RedmiBook Pro 16 charge limit.
 
 Usage:
-  battery-charge-limit set <40|50|60|70|80>
-  battery-charge-limit disable
-  battery-charge-limit get
-  battery-charge-limit restore
+  redmibook-pro-16-charge-limit set <40|50|60|70|80>
+  redmibook-pro-16-charge-limit disable
+  redmibook-pro-16-charge-limit get
+  redmibook-pro-16-charge-limit restore
 """
 
 import os
@@ -21,7 +21,7 @@ def _user_home():
         return os.path.expanduser(f"~{sudo_user}")
     return os.path.expanduser("~")
 
-CONFIG_DIR = os.path.join(_user_home(), ".config", "battery-charge-limit")
+CONFIG_DIR = os.path.join(_user_home(), ".config", "redmibook-pro-16-charge-limit")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config")
 
 LIMIT_MAP = {40: 0x08, 50: 0x07, 60: 0x06, 70: 0x05, 80: 0x01}
@@ -186,7 +186,7 @@ def main():
 
     elif cmd == "set":
         if len(sys.argv) < 3:
-            print("Usage: battery-charge-limit set <40|50|60|70|80>")
+            print("Usage: redmibook-pro-16-charge-limit set <40|50|60|70|80>")
             sys.exit(1)
         try:
             percent = int(sys.argv[2])
