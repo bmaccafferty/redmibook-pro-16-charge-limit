@@ -1,0 +1,181 @@
+#!/usr/bin/env python3
+"""GTK4 GUI for Xiaomi RedmiBook Pro 16 battery charge limit."""
+
+import gi
+
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
+
+from gi.repository import GLib, Gio, Gtk, Adw
+import subprocess
+import os
+import sys
+
+BACKEND = os.path.expanduser("~/.local/bin/battery-charge-limit")
+LIMITS = [40, 50, 60, 70, 80]
+
+
+def run_backend(*args):
+    """Run the backend script via sudo and return stdout."""
+    try:
+        proc = subprocess.run(
+            ["sudo", "-n", BACKEND, *args],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if proc.returncode != 0:
+            return None, proc.stderr.strip()
+        return proc.stdout.strip(), None
+    except subprocess.TimeoutExpired:
+        return None, "Command timed out"
+    except FileNotFoundError:
+        return None, "Backend script not found"
+    except Exception as e:
+        return None, str(e)
+
+
+class ChargeLimitApp(Adw.Application):
+    def __init__(self):
+        super().__init__(
+            application_id="com.xiomi.charge-limiter",
+            flags=Gio.ApplicationFlags.DEFAULT_FLAGS,
+        )
+
+    def do_activate(self):
+        win = ChargeLimitWindow(self)
+        win.present()
+
+
+class ChargeLimitWindow(Adw.Window):
+    def __init__(self, app):
+        super().__init__(
+            application=app,
+            title="Charge Limit",
+            default_width=380,
+            default_height=320,
+            resizable=False,
+        )
+
+        self.selected_limit = 80
+        self._current_limit = None
+
+        self.setup_ui()
+        self.refresh_status()
+
+    def setup_ui(self):
+        toolbox = Adw.ToolbarView()
+
+        header = Adw.HeaderBar()
+        toolbox.add_top_bar(header)
+
+        # Refresh button in header
+        refresh_btn = Gtk.Button(icon_name="view-refresh-symbolic")
+        refresh_btn.set_tooltip_text("Refresh status")
+        refresh_btn.connect("clicked", lambda _: self.refresh_status())
+        header.pack_start(refresh_btn)
+
+        # Main content
+        page = Adw.PreferencesPage()
+        toolbox.set_content(page)
+
+        # — Limit selection group —
+        group = Adw.PreferencesGroup(title="Charge Limit")
+        page.add(group)
+
+        self.radio_rows = {}
+        first = None
+        for val in LIMITS:
+            row = Adw.ActionRow(title=f"{val}%")
+            radio = Gtk.CheckButton()
+            radio.set_group(first)
+            if first is None:
+                first = radio
+                radio.set_active(True)
+            radio.connect("toggled", self.on_limit_toggled, val)
+            row.add_suffix(radio)
+            row.set_activatable_widget(radio)
+            group.add(row)
+            self.radio_rows[val] = radio
+
+        # — Status group —
+        status_group = Adw.PreferencesGroup(title="Status")
+        page.add(status_group)
+
+        self.status_row = Adw.ActionRow(title="Active Limit")
+        self.status_label = Gtk.Label(label="—")
+        self.status_label.add_css_class("heading")
+        self.status_row.add_suffix(self.status_label)
+        status_group.add(self.status_row)
+
+        # — Action buttons —
+        actions_group = Adw.PreferencesGroup()
+        page.add(actions_group)
+
+        apply_btn = Gtk.Button(label="Apply", css_classes=["suggested-action"])
+        apply_btn.connect("clicked", self.on_apply)
+        actions_group.add(apply_btn)
+
+        disable_btn = Gtk.Button(label="Disable Limit")
+        disable_btn.connect("clicked", self.on_disable)
+        actions_group.add(disable_btn)
+
+        # Wrap in toast overlay and set as window content
+        toast_overlay = Adw.ToastOverlay()
+        toast_overlay.set_child(toolbox)
+        self.set_content(toast_overlay)
+        self.toast_overlay = toast_overlay
+
+    def on_limit_toggled(self, button, val):
+        if button.get_active():
+            self.selected_limit = val
+
+    def show_toast(self, message):
+        toast = Adw.Toast.new(message)
+        toast.set_timeout(3)
+        self.toast_overlay.add_toast(toast)
+
+    def refresh_status(self, *_):
+        out, err = run_backend("get")
+        if out is not None:
+            try:
+                limit = int(out)
+                self._current_limit = limit
+                if limit > 0:
+                    self.status_label.set_label(f"{limit}%")
+                    # Update radio selection
+                    for val, rb in self.radio_rows.items():
+                        rb.set_active(val == limit)
+                else:
+                    self.status_label.set_label("Disabled (100%)")
+            except ValueError:
+                self.status_label.set_label(f"Unknown ({out})")
+        else:
+            self.status_label.set_label("Error")
+            self.show_toast(f"Read failed: {err}")
+
+    def on_apply(self, _):
+        val = self.selected_limit
+        out, err = run_backend("set", str(val))
+        if err:
+            self.show_toast(f"Failed: {err}")
+        else:
+            self.show_toast(f"Limit set to {val}%")
+            self.refresh_status()
+
+    def on_disable(self, _):
+        out, err = run_backend("disable")
+        if err:
+            self.show_toast(f"Failed: {err}")
+        else:
+            self.show_toast("Limit disabled (charging to 100%)")
+            self.refresh_status()
+
+
+def main():
+    app = ChargeLimitApp()
+    app.run(sys.argv)
+
+
+if __name__ == "__main__":
+    main()

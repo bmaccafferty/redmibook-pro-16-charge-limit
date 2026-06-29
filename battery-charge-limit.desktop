@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Battery Charge Limit
+Comment=Set charge limit for Xiaomi RedmiBook Pro 16
+Exec=battery-charge-limit-gui
+Icon=battery
+Terminal=false
+Categories=Settings;X-Hardware;
+StartupNotify=true

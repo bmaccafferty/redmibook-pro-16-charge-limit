@@ -1,0 +1,208 @@
+#!/usr/bin/env python3
+"""Set, disable, get, or restore the Xiaomi RedmiBook Pro 16 charge limit.
+
+Usage:
+  battery-charge-limit set <40|50|60|70|80>
+  battery-charge-limit disable
+  battery-charge-limit get
+  battery-charge-limit restore
+"""
+
+import os
+import sys
+import configparser
+import re
+import subprocess
+
+def _user_home():
+    """Return the calling user's home directory (works under sudo)."""
+    sudo_user = os.environ.get("SUDO_USER")
+    if sudo_user:
+        return os.path.expanduser(f"~{sudo_user}")
+    return os.path.expanduser("~")
+
+CONFIG_DIR = os.path.join(_user_home(), ".config", "battery-charge-limit")
+CONFIG_FILE = os.path.join(CONFIG_DIR, "config")
+
+LIMIT_MAP = {40: 0x08, 50: 0x07, 60: 0x06, 70: 0x05, 80: 0x01}
+
+ACPI_CALL_PATH = "/proc/acpi/call"
+
+readable = lambda: os.access(ACPI_CALL_PATH, os.R_OK)
+writable = lambda: os.access(ACPI_CALL_PATH, os.W_OK)
+
+
+def acpi_call_raw(command_byte, value_byte):
+    """Write an ACPI command to /proc/acpi/call and return the response bytes.
+
+    Must use tee (subprocess) — Python's open().write() doesn't trigger the
+    acpi_call kernel driver correctly.
+    """
+    acpi_string = (
+        "\\_SB.PC00.WMID.WMAA 0x0 0x1 {{ "
+        "0x00 0x{command:02x} 0x00 0x10 0x02 0x00 0x{value:02x} 0x00 "
+        "0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 "
+        "0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 "
+        "0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 }}"
+    ).format(command=command_byte, value=value_byte)
+
+    proc = subprocess.run(
+        ["tee", ACPI_CALL_PATH],
+        input=acpi_string,
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"tee failed: {proc.stderr}")
+
+    with open(ACPI_CALL_PATH, "rb") as f:
+        data = f.read()
+
+    return data
+
+
+def parse_response(data):
+    """Parse b'{0x00, 0x80, ...}\\x00' response into a list of ints."""
+    if not data or data.strip(b'\x00') == b'' or b'not called' in data:
+        return None
+    text = data.decode('ascii', errors='replace')
+    match = re.findall(r"0x([0-9a-fA-F]{2})", text)
+    if match:
+        return [int(x, 16) for x in match]
+    return None
+
+
+def get_limit():
+    """Read the current charge limit via ACPI call.
+
+    Uses 0xFA (enable charge limit), which echoes back the active
+    limit hex value in byte 6 of the response buffer.
+    """
+    raw = acpi_call_raw(0xFA, 0x00)
+    parsed = parse_response(raw)
+    if parsed is None or len(parsed) < 7:
+        return None
+
+    val = parsed[6]
+
+    limit_map_rev = {v: k for k, v in LIMIT_MAP.items()}
+    limit = limit_map_rev.get(val, None)
+
+    if limit is not None:
+        return limit
+
+    if val == 0x00:
+        return 0
+    if val == 0x80:
+        return 100
+
+    return val
+
+
+def set_limit(percent):
+    """Set the charge limit. percent: 40, 50, 60, 70, or 80."""
+    hex_val = LIMIT_MAP.get(percent)
+    if hex_val is None:
+        print(f"Invalid limit: {percent}. Valid: 40, 50, 60, 70, 80")
+        return False
+
+    acpi_call_raw(0xFB, hex_val)
+    acpi_call_raw(0xFA, 0x00)
+    acpi_call_raw(0xFA, 0x00)
+
+    _write_config(percent)
+    print(f"Charge limit set to {percent}%")
+    return True
+
+
+def disable():
+    """Disable the charge limit (allow charging to 100%).
+
+    Does NOT touch the config file — restore() will re-apply the
+    last saved limit on next boot.
+    """
+    acpi_call_raw(0xFB, 0x00)
+    acpi_call_raw(0xFB, 0x00)
+
+    print("Charge limit disabled")
+    return True
+
+
+def restore():
+    """Restore the limit from config file."""
+    percent = _read_config()
+    if percent and percent > 0:
+        print(f"Restoring charge limit to {percent}%")
+        return set_limit(percent)
+    else:
+        print("No saved limit to restore")
+        return True
+
+
+def _write_config(percent):
+    os.makedirs(CONFIG_DIR, exist_ok=True)
+    config = configparser.ConfigParser()
+    config["Settings"] = {"limit": str(percent)}
+    with open(CONFIG_FILE, "w") as f:
+        config.write(f)
+
+
+def _read_config():
+    if not os.path.exists(CONFIG_FILE):
+        return None
+    config = configparser.ConfigParser()
+    config.read(CONFIG_FILE)
+    try:
+        return int(config.get("Settings", "limit"))
+    except (ValueError, configparser.NoSectionError, configparser.NoOptionError):
+        return None
+
+
+def print_usage():
+    print(__doc__)
+    sys.exit(1)
+
+
+def main():
+    if not os.path.exists(ACPI_CALL_PATH):
+        print(f"Error: {ACPI_CALL_PATH} not found. Is the acpi_call module loaded?")
+        sys.exit(1)
+
+    if not writable():
+        print("Error: no write permission to /proc/acpi/call. Run with sudo.")
+        sys.exit(1)
+
+    if len(sys.argv) < 2:
+        print_usage()
+
+    cmd = sys.argv[1]
+
+    if cmd == "get":
+        limit = get_limit()
+        if limit is None:
+            print("unknown")
+        else:
+            print(limit)
+
+    elif cmd == "set":
+        if len(sys.argv) < 3:
+            print("Usage: battery-charge-limit set <40|50|60|70|80>")
+            sys.exit(1)
+        try:
+            percent = int(sys.argv[2])
+        except ValueError:
+            print_usage()
+        set_limit(percent)
+
+    elif cmd == "disable":
+        disable()
+
+    elif cmd == "restore":
+        restore()
+
+    else:
+        print_usage()
+
+
+if __name__ == "__main__":
+    main()

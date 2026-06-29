@@ -1,0 +1,13 @@
+[Unit]
+Description=Restore battery charge limit after login
+After=graphical-session.target
+Requires=graphical-session.target
+
+[Service]
+Type=oneshot
+ExecStartPre=/bin/bash -c 'sleep 5; while [ ! -f /proc/acpi/call ]; do sleep 1; done'
+ExecStart=sudo -n %h/.local/bin/battery-charge-limit restore
+RemainAfterExit=yes
+
+[Install]
+WantedBy=graphical-session.target

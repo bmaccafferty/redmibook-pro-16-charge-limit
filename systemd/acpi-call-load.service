@@ -1,0 +1,11 @@
+[Unit]
+Description=Load acpi_call kernel module
+Before=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c 'lsmod | grep -q acpi_call || insmod /var/lib/battery-charge-limit/acpi_call.ko'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
